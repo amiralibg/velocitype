@@ -1,0 +1,294 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  --color-volt: #c8ff00;
+  --color-ink: #f2f2ed;
+  --color-mute: #6f6f68;
+  --color-coal: #0b0b0a;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: #0b0b0a;
+  color: #f2f2ed;
+  font-family: var(--font-display);
+  overflow: hidden;
+}
+
+/* Film grain over everything — pure SVG, no assets */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+::selection {
+  background: rgba(200, 255, 0, 0.3);
+}
+
+/* ── Typing cursor ─────────────────────────────────────────── */
+
+@keyframes cursor-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  50%,
+  95% {
+    opacity: 0;
+  }
+}
+
+.char-cursor {
+  position: relative;
+}
+
+.char-cursor::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 3px;
+  background: var(--color-volt);
+  animation: cursor-blink 1s step-end infinite;
+}
+
+/* ── Screen + element transitions ──────────────────────────── */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes letter-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.4em);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-letter-in {
+  display: inline-block;
+  animation: letter-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--d, 0s);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise-in {
+  animation: rise-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--d, 0s);
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  70% {
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-pop-in {
+  animation: pop-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+}
+
+/* ── Combat / damage feedback ──────────────────────────────── */
+
+@keyframes screen-shake {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0);
+  }
+  15% {
+    transform: translate(-12px, 6px) rotate(-0.5deg);
+  }
+  35% {
+    transform: translate(10px, -5px) rotate(0.4deg);
+  }
+  55% {
+    transform: translate(-8px, -6px) rotate(-0.3deg);
+  }
+  75% {
+    transform: translate(6px, 4px) rotate(0.2deg);
+  }
+}
+
+.animate-screen-shake {
+  animation: screen-shake 0.4s ease both;
+}
+
+@keyframes damage-flash {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(255, 59, 48, 0);
+  }
+  40% {
+    box-shadow: inset 0 0 140px 30px rgba(255, 59, 48, 0.5);
+  }
+}
+
+.animate-damage-flash {
+  animation: damage-flash 0.45s ease both;
+}
+
+@keyframes danger-pulse {
+  0%,
+  100% {
+    box-shadow: inset 0 0 90px 20px rgba(255, 59, 48, 0.14);
+  }
+  50% {
+    box-shadow: inset 0 0 140px 45px rgba(255, 59, 48, 0.38);
+  }
+}
+
+.danger-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  animation: danger-pulse 1s ease-in-out infinite;
+}
+
+@keyframes heart-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  12% {
+    transform: scale(1.35);
+  }
+  24% {
+    transform: scale(1);
+  }
+  36% {
+    transform: scale(1.25);
+  }
+  48% {
+    transform: scale(1);
+  }
+}
+
+.animate-heart-beat {
+  animation: heart-beat 1s ease-in-out infinite;
+  display: inline-block;
+}
+
+@keyframes heart-shatter {
+  0% {
+    transform: scale(1.6) rotate(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.7) rotate(18deg);
+    opacity: 0.4;
+  }
+}
+
+.animate-heart-shatter {
+  display: inline-block;
+  animation: heart-shatter 0.5s cubic-bezier(0.3, 0, 0.6, 1) both;
+}
+
+@keyframes damage-float {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.7);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -10px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -64px) scale(1);
+  }
+}
+
+.damage-float {
+  font-family: var(--font-mono);
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: var(--color-volt);
+  animation: damage-float 0.9s ease-out both;
+}
+
+@keyframes warn-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-warn-pulse {
+  animation: warn-pulse 0.7s ease-in-out infinite;
+}
+
+/* ── Index-row hover (menu) ────────────────────────────────── */
+
+.mode-row {
+  transition:
+    background-color 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    padding-left 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.25s;
+}
+
+.mode-row:hover {
+  background-color: var(--color-volt);
+  padding-left: 2.5rem;
+}
+
+.mode-row:hover,
+.mode-row:hover * {
+  color: #0b0b0a !important;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.hairline {
+  border-color: rgba(242, 242, 237, 0.12);
+}
