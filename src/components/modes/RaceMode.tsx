@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { CSSProperties } from 'react';
 import type { Difficulty, ModeProps } from '../../lib/types';
 import { randomRaceSentence } from '../../lib/words';
 import { sfx } from '../../lib/sfx';
@@ -137,25 +137,20 @@ export default function RaceMode({ difficulty, onFinish, onQuit }: ModeProps) {
     }, 2200);
   }, [onFinish, tuning.goalKm]);
 
-  const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (countdown > 0 || stopped) return;
-    engine.handleKeyDown(e);
-  };
-
   const km = hud.meters / 1000;
   const goalPct = Math.min(100, (km / tuning.goalKm) * 100);
   const goalReached = goalPct >= 100;
 
   return (
     <div className="flex h-full flex-col">
-      <HiddenTypingInput onKeyDown={onKeyDown} />
+      <HiddenTypingInput engine={engine} disabled={countdown > 0 || stopped} />
 
       {/* ── Highway ──────────────────────────────────────────── */}
-      <div className="relative h-[58%]">
+      <div className="relative h-[44%] md:h-[58%]">
         <RaceTrack ctrl={ctrl} onStop={handleStop} />
 
         {/* top strip */}
-        <div className="absolute inset-x-0 top-0 flex items-start justify-between p-6">
+        <div className="absolute inset-x-0 top-0 flex items-start justify-between p-4 md:p-6">
           <div className="flex flex-col gap-4">
             <button
               onClick={onQuit}
@@ -178,7 +173,7 @@ export default function RaceMode({ difficulty, onFinish, onQuit }: ModeProps) {
           </div>
           <div className="text-right font-mono">
             <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">distance</p>
-            <p className="tabular mt-1 text-3xl font-bold text-white">
+            <p className="tabular mt-1 text-2xl font-bold text-white md:text-3xl">
               {km.toFixed(2)}
               <span className="ml-1.5 text-sm font-normal text-zinc-500">km</span>
             </p>
@@ -186,9 +181,9 @@ export default function RaceMode({ difficulty, onFinish, onQuit }: ModeProps) {
         </div>
 
         {/* speedometer */}
-        <div className="absolute bottom-6 right-6 text-right font-mono">
+        <div className="absolute bottom-4 right-4 text-right font-mono md:bottom-6 md:right-6">
           <p
-            className={`tabular text-7xl font-bold leading-none ${
+            className={`tabular text-4xl font-bold leading-none md:text-7xl ${
               hud.stalling ? 'animate-warn-pulse text-red-400' : 'text-white'
             }`}
           >
@@ -199,8 +194,8 @@ export default function RaceMode({ difficulty, onFinish, onQuit }: ModeProps) {
 
         {/* stall warning */}
         {hud.stalling && !stopped && countdown === 0 && (
-          <div className="absolute inset-x-0 bottom-7 flex justify-center">
-            <p className="animate-warn-pulse font-mono text-lg font-bold uppercase tracking-[0.35em] text-red-400">
+          <div className="absolute inset-x-0 bottom-7 flex justify-center px-4">
+            <p className="animate-warn-pulse text-center font-mono text-sm font-bold uppercase tracking-[0.35em] text-red-400 md:text-lg">
               keep typing — engine dying
             </p>
           </div>
@@ -209,14 +204,17 @@ export default function RaceMode({ difficulty, onFinish, onQuit }: ModeProps) {
         {/* countdown */}
         {countdown > 0 && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-            <span key={countdown} className="animate-pop-in font-mono text-[11rem] font-bold leading-none text-white">
+            <span
+              key={countdown}
+              className="animate-pop-in font-mono text-7xl font-bold leading-none text-white md:text-[11rem]"
+            >
               {countdown}
             </span>
           </div>
         )}
         {countdown === 0 && !engine.isStarted && !stopped && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <span className="animate-pop-in font-mono text-6xl font-bold tracking-tight text-volt">
+            <span className="animate-pop-in font-mono text-4xl font-bold tracking-tight text-volt md:text-6xl">
               GO — TYPE
             </span>
           </div>
@@ -231,9 +229,9 @@ export default function RaceMode({ difficulty, onFinish, onQuit }: ModeProps) {
             >
               engine stalled
             </p>
-            <p className="animate-pop-in tabular mt-4 font-mono text-9xl font-bold leading-none text-white">
+            <p className="animate-pop-in tabular mt-4 font-mono text-6xl font-bold leading-none text-white md:text-9xl">
               {km.toFixed(2)}
-              <span className="text-3xl font-normal text-zinc-500"> km</span>
+              <span className="text-2xl font-normal text-zinc-500 md:text-3xl"> km</span>
             </p>
             <p
               className={`animate-rise-in mt-6 font-mono text-sm font-bold uppercase tracking-[0.35em] ${
@@ -248,14 +246,14 @@ export default function RaceMode({ difficulty, onFinish, onQuit }: ModeProps) {
       </div>
 
       {/* ── Typing deck ──────────────────────────────────────── */}
-      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center px-10">
-        <div className="flex items-center justify-between border-b hairline pb-3 font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-600">
-          <span>words = boost</span>
+      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center px-5 md:px-10">
+        <div className="flex items-center justify-between gap-3 border-b hairline pb-3 font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-600">
+          <span className="hidden sm:inline">words = boost</span>
           <span>02 — night drive · {difficulty}</span>
-          <span>typos = drag</span>
+          <span className="hidden sm:inline">typos = drag</span>
         </div>
-        <div className="py-8">
-          <TextDisplay text={engine.text} typed={engine.typed} />
+        <div className="py-5 md:py-8">
+          <TextDisplay text={engine.text} typed={engine.typed} className="text-xl md:text-2xl" />
         </div>
       </div>
     </div>

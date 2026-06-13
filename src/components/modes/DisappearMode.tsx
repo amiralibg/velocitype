@@ -213,8 +213,8 @@ export default function DisappearMode({ difficulty, onFinish, onQuit }: ModeProp
         : 'gone';
 
   return (
-    <div className="mx-auto flex h-full max-w-4xl flex-col justify-center px-10">
-      <HiddenTypingInput onKeyDown={engine.handleKeyDown} />
+    <div className="mx-auto flex h-full max-w-4xl flex-col justify-center px-5 md:px-10">
+      <HiddenTypingInput engine={engine} />
 
       {/* ── Header strip ────────────────────────────────────── */}
       <div className="flex items-center justify-between border-b hairline pb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-mute">
@@ -224,10 +224,10 @@ export default function DisappearMode({ difficulty, onFinish, onQuit }: ModeProp
         <span>04 — ghost text · {difficulty}</span>
       </div>
 
-      <div className="flex items-baseline gap-12 py-8 font-mono">
+      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-3 py-6 font-mono md:gap-12 md:py-8">
         <div>
           <span
-            className={`tabular text-5xl font-bold ${
+            className={`tabular text-4xl font-bold md:text-5xl ${
               timeLeft < 10 ? 'animate-warn-pulse text-red-400' : 'text-ink'
             }`}
           >
@@ -236,14 +236,14 @@ export default function DisappearMode({ difficulty, onFinish, onQuit }: ModeProp
           <span className="ml-2 text-[10px] uppercase tracking-[0.25em] text-mute">sec</span>
         </div>
         <div>
-          <span className="tabular text-2xl font-bold text-volt">×{multiplier.toFixed(2)}</span>
+          <span className="tabular text-xl font-bold text-volt md:text-2xl">×{multiplier.toFixed(2)}</span>
           <span className="ml-2 text-[10px] uppercase tracking-[0.25em] text-mute">bonus</span>
         </div>
         <div>
-          <span className="tabular text-2xl font-bold text-ink">{engine.stats.wpm}</span>
+          <span className="tabular text-xl font-bold text-ink md:text-2xl">{engine.stats.wpm}</span>
           <span className="ml-2 text-[10px] uppercase tracking-[0.25em] text-mute">wpm</span>
         </div>
-        <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.3em] text-zinc-700">
+        <span className="w-full font-mono text-[11px] uppercase tracking-[0.3em] text-zinc-700 md:ml-auto md:w-auto">
           {fadeState === 'ready' && 'read it, then type — it will turn to dust'}
           {fadeState === 'memorize' && 'memorize — the dust comes soon'}
           {fadeState === 'fading' && 'it is turning to dust'}
@@ -252,8 +252,13 @@ export default function DisappearMode({ difficulty, onFinish, onQuit }: ModeProp
       </div>
 
       {/* ── Text + dust overlay ─────────────────────────────── */}
-      <div ref={textBoxRef} className="relative border-y hairline py-12">
-        <TextDisplay text={engine.text} typed={engine.typed} charStyle={charStyle} className="text-3xl leading-[1.9]" />
+      <div ref={textBoxRef} className="relative border-y hairline py-6 md:py-12">
+        <TextDisplay
+          text={engine.text}
+          typed={engine.typed}
+          charStyle={charStyle}
+          className="text-xl leading-[1.9] md:text-3xl"
+        />
         <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
       </div>
 

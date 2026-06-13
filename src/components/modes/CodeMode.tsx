@@ -57,7 +57,7 @@ export default function CodeMode({ difficulty, onFinish, onQuit }: ModeProps) {
   /* ── Language picker ───────────────────────────────────── */
   if (!lang) {
     return (
-      <div className="mx-auto flex h-full max-w-4xl flex-col justify-center px-10">
+      <div className="mx-auto flex h-full max-w-4xl flex-col justify-center px-5 md:px-10">
         <div className="flex items-center justify-between border-b hairline pb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-mute">
           <button onClick={onQuit} className="transition-colors hover:text-ink">
             ← menu
@@ -65,7 +65,7 @@ export default function CodeMode({ difficulty, onFinish, onQuit }: ModeProps) {
           <span>05 — code · {difficulty}</span>
         </div>
 
-        <h2 className="animate-rise-in py-10 font-display text-5xl font-bold tracking-tight">
+        <h2 className="animate-rise-in py-8 font-display text-4xl font-bold tracking-tight md:py-10 md:text-5xl">
           Pick your language.
         </h2>
 
@@ -77,11 +77,11 @@ export default function CodeMode({ difficulty, onFinish, onQuit }: ModeProps) {
                 sfx.select();
                 setLang(l.id);
               }}
-              className="mode-row animate-rise-in group flex w-full items-center gap-8 border-b hairline py-5 text-left"
+              className="mode-row animate-rise-in group flex w-full items-center gap-4 border-b hairline py-4 text-left md:gap-8 md:py-5"
               style={{ '--d': `${0.1 + i * 0.07}s` } as CSSProperties}
             >
-              <span className="w-14 font-mono text-sm text-mute">{l.ext}</span>
-              <span className="flex-1 text-2xl font-bold tracking-tight text-ink">{l.name}</span>
+              <span className="w-12 font-mono text-xs text-mute md:w-14 md:text-sm">{l.ext}</span>
+              <span className="flex-1 text-xl font-bold tracking-tight text-ink md:text-2xl">{l.name}</span>
               <span className="font-mono text-xl text-mute transition-transform duration-200 group-hover:translate-x-1.5">
                 →
               </span>
@@ -98,14 +98,14 @@ export default function CodeMode({ difficulty, onFinish, onQuit }: ModeProps) {
 
   /* ── Typing screen ─────────────────────────────────────── */
   return (
-    <div className="mx-auto flex h-full max-w-4xl flex-col justify-center px-10">
-      <HiddenTypingInput onKeyDown={engine.handleKeyDown} />
+    <div className="mx-auto flex h-full max-w-4xl flex-col justify-center px-5 md:px-10">
+      <HiddenTypingInput engine={engine} />
 
-      <div className="flex items-center justify-between border-b hairline pb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-mute">
-        <button onClick={onQuit} className="transition-colors hover:text-ink">
+      <div className="flex items-center justify-between gap-3 border-b hairline pb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-mute">
+        <button onClick={onQuit} className="shrink-0 whitespace-nowrap transition-colors hover:text-ink">
           ← menu
         </button>
-        <span>
+        <span className="text-right">
           05 — code · {difficulty} ·{' '}
           <button
             onClick={() => {
@@ -119,13 +119,13 @@ export default function CodeMode({ difficulty, onFinish, onQuit }: ModeProps) {
         </span>
       </div>
 
-      <div className="flex items-baseline gap-12 py-8 font-mono">
+      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-3 py-6 font-mono md:gap-12 md:py-8">
         <Stat label="wpm" value={`${stats.wpm}`} big accent />
         <Stat label="accuracy" value={`${stats.accuracy}%`} />
         <Stat label="errors" value={`${stats.errors}`} />
         <Stat label="time" value={formatTime(stats.elapsedMs / 1000)} />
-        <div className="ml-auto flex h-10 items-center">
-          <div className="h-px w-40 bg-zinc-800">
+        <div className="flex h-10 w-full items-center md:ml-auto md:w-auto">
+          <div className="h-px w-full bg-zinc-800 md:w-40">
             <div className="h-full bg-volt transition-all duration-200" style={{ width: `${progress}%` }} />
           </div>
         </div>
@@ -133,12 +133,12 @@ export default function CodeMode({ difficulty, onFinish, onQuit }: ModeProps) {
 
       {/* code sheet */}
       <div className="border-y hairline">
-        <div className="flex items-center justify-between border-b hairline px-5 py-2 font-mono text-[10px] uppercase tracking-[0.3em] text-zinc-700">
+        <div className="flex items-center justify-between border-b hairline px-4 py-2 font-mono text-[10px] uppercase tracking-[0.3em] text-zinc-700 md:px-5">
           <span>snippet{meta?.ext}</span>
           <span>{snippet.split('\n').length} lines</span>
         </div>
-        <div className="border-l-2 border-volt/60 py-8 pl-6 pr-4">
-          <TextDisplay text={engine.text} typed={engine.typed} className="text-xl leading-[1.9]" />
+        <div className="overflow-x-auto border-l-2 border-volt/60 py-6 pl-4 pr-3 md:py-8 md:pl-6 md:pr-4">
+          <TextDisplay text={engine.text} typed={engine.typed} className="text-sm leading-[1.9] md:text-xl" />
         </div>
       </div>
 
@@ -166,7 +166,11 @@ function Stat({
 }) {
   return (
     <div>
-      <span className={`tabular font-bold ${big ? 'text-5xl' : 'text-2xl'} ${accent ? 'text-volt' : 'text-ink'}`}>
+      <span
+        className={`tabular font-bold ${big ? 'text-4xl md:text-5xl' : 'text-xl md:text-2xl'} ${
+          accent ? 'text-volt' : 'text-ink'
+        }`}
+      >
         {value}
       </span>
       <span className="ml-2 text-[10px] uppercase tracking-[0.25em] text-mute">{label}</span>

@@ -43,7 +43,13 @@ export interface TypingEngine {
   stats: TypingStats;
   isStarted: boolean;
   isComplete: boolean;
-  handleKeyDown: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
+  handleKeyDown: (e: ReactKeyboardEvent<HTMLTextAreaElement>) => void;
+  /**
+   * Soft-keyboard path: reconcile the engine against the raw value of a text
+   * field after an `input` event. Returns the canonical typed string so the
+   * field can be mirrored back (rejected keys / disallowed deletes are undone).
+   */
+  syncFromValue: (value: string) => string;
   /** Full reset with a new target text. The clock starts on the first keystroke. */
   start: (text: string) => void;
   /** Swap in the next text chunk while keeping cumulative WPM/accuracy stats. */
@@ -121,29 +127,11 @@ export function useTypingEngine(options: TypingEngineOptions = {}): TypingEngine
     setIsComplete(false);
   }, []);
 
-  const handleKeyDown = useCallback(
-    (e: ReactKeyboardEvent<HTMLInputElement>) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+  /** Apply one character ('\n' for Enter). Shared by the keyboard and touch paths. */
+  const commitChar = useCallback(
+    (key: string) => {
       const opts = optionsRef.current;
-
-      if (e.key === 'Backspace') {
-        e.preventDefault();
-        if (opts.allowBackspace === false || completeRef.current) return;
-        if (typedRef.current.length > 0) {
-          typedRef.current = typedRef.current.slice(0, -1);
-          setTyped(typedRef.current);
-          refreshStats();
-        }
-        return;
-      }
-
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        return;
-      }
-      const key = e.key === 'Enter' ? '\n' : e.key;
       if (key.length !== 1) return;
-      e.preventDefault();
       if (completeRef.current) return;
 
       const index = typedRef.current.length;
@@ -202,39 +190,126 @@ export function useTypingEngine(options: TypingEngineOptions = {}): TypingEngine
     [refreshStats],
   );
 
-  return { text, typed, stats, isStarted, isComplete, handleKeyDown, start, loadText };
+  const commitBackspace = useCallback(() => {
+    const opts = optionsRef.current;
+    if (opts.allowBackspace === false || completeRef.current) return;
+    if (typedRef.current.length > 0) {
+      typedRef.current = typedRef.current.slice(0, -1);
+      setTyped(typedRef.current);
+      refreshStats();
+    }
+  }, [refreshStats]);
+
+  const handleKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        commitBackspace();
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        return;
+      }
+      const key = e.key === 'Enter' ? '\n' : e.key;
+      // Non-character keys (Shift, Arrow…) and unidentified soft-keyboard keys
+      // fall through to the touch `syncFromValue` path.
+      if (key.length !== 1) return;
+      e.preventDefault();
+      commitChar(key);
+    },
+    [commitChar, commitBackspace],
+  );
+
+  const syncFromValue = useCallback(
+    (value: string): string => {
+      const prev = typedRef.current;
+      // Longest common prefix — everything past it is an edit (delete + insert).
+      let p = 0;
+      const min = Math.min(prev.length, value.length);
+      while (p < min && prev[p] === value[p]) p++;
+      for (let i = prev.length; i > p; i--) commitBackspace();
+      for (let i = p; i < value.length; i++) commitChar(value[i]);
+      return typedRef.current;
+    },
+    [commitChar, commitBackspace],
+  );
+
+  return { text, typed, stats, isStarted, isComplete, handleKeyDown, syncFromValue, start, loadText };
 }
 
 /**
- * Invisible input that captures all typing. Stays focused for the whole game;
- * clicking anywhere re-focuses it.
+ * Off-screen field that captures all typing. On desktop it reads physical
+ * `keydown`; on touch devices it reads `input` events (the soft keyboard's
+ * `keydown` is unreliable) and mirrors the engine's canonical text back.
+ *
+ * Stays focused for the whole game. A tap anywhere re-focuses it — and because
+ * that runs inside a user gesture, it also opens the mobile keyboard.
  */
 export function HiddenTypingInput({
-  onKeyDown,
+  engine,
+  disabled = false,
 }: {
-  onKeyDown: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
+  engine: TypingEngine;
+  disabled?: boolean;
 }) {
-  const ref = useRef<HTMLInputElement>(null);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const engineRef = useRef(engine);
+  engineRef.current = engine;
 
+  // Keep focus, and refocus on any pointer-down so the soft keyboard reopens.
   useEffect(() => {
-    ref.current?.focus();
+    const focus = () => ref.current?.focus();
+    focus();
     const id = setInterval(() => {
-      if (document.activeElement !== ref.current) ref.current?.focus();
+      if (document.activeElement !== ref.current) focus();
     }, 250);
-    return () => clearInterval(id);
+    window.addEventListener('pointerdown', focus);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('pointerdown', focus);
+    };
   }, []);
 
+  // Mirror the engine's canonical typed text into the field so the soft
+  // keyboard's value diff (and its Backspace) stays anchored to real progress.
+  useEffect(() => {
+    const el = ref.current;
+    if (el && el.value !== engine.typed) el.value = engine.typed;
+  }, [engine.typed]);
+
   return (
-    <input
+    <textarea
       ref={ref}
-      className="absolute h-0 w-0 opacity-0"
+      // text-base (16px) keeps iOS from zooming the page on focus
+      className="absolute -z-10 h-0 w-0 resize-none border-0 bg-transparent p-0 text-base opacity-0"
       autoFocus
-      autoCapitalize="off"
+      autoCapitalize="none"
       autoCorrect="off"
+      autoComplete="off"
       spellCheck={false}
-      onKeyDown={onKeyDown}
-      onBlur={() => setTimeout(() => ref.current?.focus(), 10)}
+      inputMode={disabled ? 'none' : 'text'}
       aria-label="Typing input"
+      onKeyDown={(e) => {
+        if (disabled) {
+          e.preventDefault();
+          return;
+        }
+        engineRef.current.handleKeyDown(e);
+      }}
+      onInput={(e) => {
+        const el = e.currentTarget;
+        if (disabled) {
+          el.value = engineRef.current.typed;
+          return;
+        }
+        const canonical = engineRef.current.syncFromValue(el.value);
+        // Re-anchor the field to canonical text (undo rejected keys / deletes).
+        if (el.value !== canonical) el.value = canonical;
+      }}
+      onBlur={() => setTimeout(() => ref.current?.focus(), 10)}
     />
   );
 }

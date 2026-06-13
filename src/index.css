@@ -15,11 +15,25 @@ body,
   height: 100%;
 }
 
+/* Dynamic viewport unit: tracks the mobile URL bar / soft keyboard so the
+   game always fills exactly the visible area. */
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
+
 body {
   background: #0b0b0a;
   color: #f2f2ed;
   font-family: var(--font-display);
   overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* Film grain over everything — pure SVG, no assets */
@@ -275,13 +289,27 @@ body::after {
     color 0.25s;
 }
 
-.mode-row:hover {
-  background-color: var(--color-volt);
-  padding-left: 2.5rem;
+/* Hover affordance only on devices with a real pointer — keeps touch taps
+   from leaving rows stuck in the inverted hover state. */
+@media (hover: hover) {
+  .mode-row:hover {
+    background-color: var(--color-volt);
+    padding-left: 2.5rem;
+  }
+
+  .mode-row:hover,
+  .mode-row:hover * {
+    color: #0b0b0a !important;
+  }
 }
 
-.mode-row:hover,
-.mode-row:hover * {
+/* Touch feedback: briefly invert on tap. */
+.mode-row:active {
+  background-color: var(--color-volt);
+}
+
+.mode-row:active,
+.mode-row:active * {
   color: #0b0b0a !important;
 }
 

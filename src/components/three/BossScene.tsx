@@ -326,7 +326,7 @@ function CameraRig() {
     if (done.current) return;
     done.current = true;
     camera.position.set(0, 3, 9.6);
-    camera.lookAt(0, 2.6, -1);
+    camera.lookAt(0, 3.3, -1);
   });
   return null;
 }

@@ -48,10 +48,10 @@ export default function ResultsScreen({ result, isNewBest, onPlayAgain, onChange
   ];
 
   return (
-    <div className="mx-auto flex h-full max-w-6xl flex-col px-10 py-7">
+    <div className="mx-auto flex min-h-full max-w-6xl flex-col px-5 py-6 md:px-10 md:py-7">
       {/* ── Top bar ─────────────────────────────────────────── */}
       <header
-        className="animate-rise-in flex items-center justify-between border-b hairline pb-5 font-mono text-[11px] uppercase tracking-[0.25em] text-mute"
+        className="animate-rise-in flex items-center justify-between gap-4 border-b hairline pb-5 font-mono text-[10px] uppercase tracking-[0.25em] text-mute md:text-[11px]"
         style={{ '--d': '0.05s' } as CSSProperties}
       >
         <span>{MODE_NAMES[result.mode]} — run complete</span>
@@ -61,11 +61,11 @@ export default function ResultsScreen({ result, isNewBest, onPlayAgain, onChange
       </header>
 
       {/* ── Verdict + WPM ───────────────────────────────────── */}
-      <div className="flex flex-1 items-center">
+      <div className="flex flex-1 items-center py-8 md:py-0">
         <div className="w-full">
-          <div className="flex items-end justify-between gap-8">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between md:gap-8">
             <h1
-              className="animate-rise-in font-display text-[clamp(3rem,8vw,7.5rem)] font-bold leading-[0.95] tracking-[-0.04em]"
+              className="animate-rise-in font-display text-[clamp(2.75rem,11vw,7.5rem)] font-bold leading-[0.95] tracking-[-0.04em]"
               style={{ '--d': '0.15s' } as CSSProperties}
             >
               {result.won ? (
@@ -82,8 +82,13 @@ export default function ResultsScreen({ result, isNewBest, onPlayAgain, onChange
                 </>
               )}
             </h1>
-            <div className="animate-rise-in pb-3 text-right" style={{ '--d': '0.3s' } as CSSProperties}>
-              <p className={`tabular font-mono text-[clamp(4rem,10vw,9rem)] font-bold leading-none ${result.won ? 'text-volt' : 'text-ink'}`}>
+            <div
+              className="animate-rise-in text-left md:pb-3 md:text-right"
+              style={{ '--d': '0.3s' } as CSSProperties}
+            >
+              <p
+                className={`tabular font-mono text-[clamp(3.5rem,18vw,9rem)] font-bold leading-none ${result.won ? 'text-volt' : 'text-ink'}`}
+              >
                 {wpm}
               </p>
               <p className="mt-1 font-mono text-xs uppercase tracking-[0.4em] text-mute">words / minute</p>
@@ -102,34 +107,34 @@ export default function ResultsScreen({ result, isNewBest, onPlayAgain, onChange
       </div>
 
       {/* ── Stats strip ─────────────────────────────────────── */}
-      <div className="grid grid-cols-4 border-t hairline">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-5 border-t hairline pt-5 md:grid-cols-4 md:gap-0 md:pt-0">
         {stats.map((s, i) => (
           <div
             key={s.label}
-            className={`animate-rise-in py-7 ${i > 0 ? 'border-l hairline pl-8' : ''}`}
+            className={`animate-rise-in md:py-7 ${i > 0 ? 'md:border-l md:hairline md:pl-8' : ''}`}
             style={{ '--d': `${0.4 + i * 0.07}s` } as CSSProperties}
           >
             <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-mute">{s.label}</p>
-            <p className="tabular mt-2 font-mono text-4xl font-bold text-ink">{s.value}</p>
+            <p className="tabular mt-2 font-mono text-3xl font-bold text-ink md:text-4xl">{s.value}</p>
           </div>
         ))}
       </div>
 
       {/* ── Actions ─────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-t hairline pt-6 pb-1">
+      <div className="flex flex-col gap-4 border-t hairline pt-6 pb-1 md:flex-row md:items-center md:justify-between">
         <p
           className="animate-rise-in font-mono text-[11px] uppercase tracking-[0.25em] text-mute"
           style={{ '--d': '0.75s' } as CSSProperties}
         >
           score&nbsp;·&nbsp;<span className="tabular text-lg font-bold text-ink">{score}</span>
         </p>
-        <div className="animate-rise-in flex gap-3" style={{ '--d': '0.85s' } as CSSProperties}>
+        <div className="animate-rise-in flex w-full gap-3 md:w-auto" style={{ '--d': '0.85s' } as CSSProperties}>
           <button
             onClick={() => {
               sfx.select();
               onPlayAgain();
             }}
-            className="bg-volt px-9 py-3 font-mono text-sm font-bold uppercase tracking-[0.2em] text-coal transition-transform duration-150 hover:-translate-y-0.5"
+            className="flex-1 bg-volt px-6 py-3 font-mono text-sm font-bold uppercase tracking-[0.2em] text-coal transition-transform duration-150 hover:-translate-y-0.5 md:flex-none md:px-9"
           >
             Play again
           </button>
@@ -138,7 +143,7 @@ export default function ResultsScreen({ result, isNewBest, onPlayAgain, onChange
               sfx.select();
               onChangeMode();
             }}
-            className="border hairline px-9 py-3 font-mono text-sm font-bold uppercase tracking-[0.2em] text-ink transition-colors duration-150 hover:border-ink"
+            className="flex-1 border hairline px-6 py-3 font-mono text-sm font-bold uppercase tracking-[0.2em] text-ink transition-colors duration-150 hover:border-ink md:flex-none md:px-9"
           >
             Change mode
           </button>

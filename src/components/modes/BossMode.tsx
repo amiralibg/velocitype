@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import type { Difficulty, ModeProps } from '../../lib/types';
-import { bossWord } from '../../lib/words';
-import { sfx } from '../../lib/sfx';
-import { HiddenTypingInput, useTypingEngine } from '../typing/TypingEngine';
-import TextDisplay from '../typing/TextDisplay';
-import BossScene from '../three/BossScene';
-import type { BossFx } from '../three/BossScene';
+import { useEffect, useRef, useState } from "react";
+import type { Difficulty, ModeProps } from "../../lib/types";
+import { bossWord } from "../../lib/words";
+import { sfx } from "../../lib/sfx";
+import { HiddenTypingInput, useTypingEngine } from "../typing/TypingEngine";
+import TextDisplay from "../typing/TextDisplay";
+import BossScene from "../three/BossScene";
+import type { BossFx } from "../three/BossScene";
 
 /**
  * The yeti's rage builds on a timer. Each completed word wounds him AND
@@ -14,7 +14,11 @@ import type { BossFx } from '../three/BossScene';
  */
 
 const MAX_HP: Record<Difficulty, number> = { easy: 80, medium: 100, hard: 130 };
-const ATTACK_WINDOW: Record<Difficulty, number> = { easy: 9000, medium: 7000, hard: 5500 };
+const ATTACK_WINDOW: Record<Difficulty, number> = {
+  easy: 7000,
+  medium: 5000,
+  hard: 3000,
+};
 const DAMAGE_PER_WORD = 10;
 const MAX_LIVES = 3;
 const TYPO_PENALTY = 0.22; // a typo burns this fraction of the attack window
@@ -29,12 +33,18 @@ export default function BossMode({ difficulty, onFinish, onQuit }: ModeProps) {
   const [hurtKey, setHurtKey] = useState(0); // re-triggers flash + shake
   const [hitKey, setHitKey] = useState(0); // re-triggers the floating damage number
   const [typoKey, setTypoKey] = useState(0); // re-triggers the time-penalty notice
-  const [outcome, setOutcome] = useState<'win' | 'lose' | null>(null);
+  const [outcome, setOutcome] = useState<"win" | "lose" | null>(null);
   const finishedRef = useRef(false);
   const hpRef = useRef(maxHp);
   const livesRef = useRef(MAX_LIVES);
   const deadlineRef = useRef(0);
-  const fx = useRef<BossFx>({ hitAt: 0, attackAt: 0, dead: false, deadAt: 0, charge: 0 });
+  const fx = useRef<BossFx>({
+    hitAt: 0,
+    attackAt: 0,
+    dead: false,
+    deadAt: 0,
+    charge: 0,
+  });
 
   const engine = useTypingEngine({
     allowBackspace: false,
@@ -70,20 +80,20 @@ export default function BossMode({ difficulty, onFinish, onQuit }: ModeProps) {
   function endGame(won: boolean) {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    setOutcome(won ? 'win' : 'lose');
+    setOutcome(won ? "win" : "lose");
     if (won) sfx.win();
     else sfx.lose();
     setTimeout(() => {
       const { wpm, accuracy, errors, elapsedMs } = engineRef.current.stats;
       const damage = maxHp - hpRef.current;
       onFinish({
-        mode: 'boss',
+        mode: "boss",
         won,
         wpm,
         accuracy,
         errors,
         timeSeconds: elapsedMs / 1000,
-        statLabel: 'Damage dealt',
+        statLabel: "Damage dealt",
         statValue: `${damage} HP`,
         score: damage + wpm,
       });
@@ -100,7 +110,10 @@ export default function BossMode({ difficulty, onFinish, onQuit }: ModeProps) {
     const id = setInterval(() => {
       if (finishedRef.current) return;
       const now = performance.now();
-      const c = Math.min(1, Math.max(0, 1 - (deadlineRef.current - now) / windowMs));
+      const c = Math.min(
+        1,
+        Math.max(0, 1 - (deadlineRef.current - now) / windowMs),
+      );
       fx.current.charge = c;
       setCharge(c);
       if (now >= deadlineRef.current) {
@@ -134,42 +147,52 @@ export default function BossMode({ difficulty, onFinish, onQuit }: ModeProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <HiddenTypingInput onKeyDown={outcome ? () => {} : engine.handleKeyDown} />
+      <HiddenTypingInput engine={engine} disabled={!!outcome} />
 
       {/* ── Forest arena ─────────────────────────────────────── */}
-      <div className="relative h-[58%]">
-        <BossScene fx={fx} hpFraction={hp / maxHp} danger={outcome === 'lose' ? 1 : danger} />
+      <div className="relative h-[44%] md:h-[58%]">
+        <BossScene
+          fx={fx}
+          hpFraction={hp / maxHp}
+          danger={outcome === "lose" ? 1 : danger}
+        />
 
         {/* hit / hurt overlays */}
         {hurtKey > 0 && (
-          <div key={`flash-${hurtKey}`} className="animate-damage-flash pointer-events-none absolute inset-0" />
+          <div
+            key={`flash-${hurtKey}`}
+            className="animate-damage-flash pointer-events-none absolute inset-0"
+          />
         )}
         {lives === 1 && !outcome && <div className="danger-vignette" />}
 
         {/* floating damage number */}
         {hitKey > 0 && !outcome && (
-          <div key={`dmg-${hitKey}`} className="damage-float pointer-events-none absolute left-1/2 top-[26%]">
+          <div
+            key={`dmg-${hitKey}`}
+            className="damage-float pointer-events-none absolute left-1/2 top-[26%]"
+          >
             -{DAMAGE_PER_WORD}
           </div>
         )}
 
         {/* top strip */}
-        <div className="absolute inset-x-0 top-0 flex items-start justify-between p-6">
-          <div className="flex flex-col gap-4">
+        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-4 p-4 md:p-6">
+          <div className="flex flex-col gap-3 md:gap-4">
             <button
               onClick={onQuit}
               className="w-fit font-mono text-[11px] uppercase tracking-[0.25em] text-zinc-400 transition-colors hover:text-white"
             >
               ← menu
             </button>
-            <div className="flex gap-2 text-3xl leading-none">
+            <div className="flex gap-2 text-2xl leading-none md:text-3xl">
               {Array.from({ length: MAX_LIVES }, (_, i) => {
                 const alive = i < lives;
                 const cls = !alive
-                  ? 'animate-heart-shatter text-zinc-800'
+                  ? "animate-heart-shatter text-zinc-800"
                   : lives === 1
-                    ? 'animate-heart-beat text-red-500'
-                    : 'text-red-500';
+                    ? "animate-heart-beat text-red-500"
+                    : "text-red-500";
                 return (
                   <span key={`${i}-${alive}`} className={cls}>
                     ♥
@@ -179,10 +202,10 @@ export default function BossMode({ difficulty, onFinish, onQuit }: ModeProps) {
             </div>
           </div>
 
-          <div className="w-[26rem] font-mono">
-            <div className="flex items-baseline justify-between text-[10px] uppercase tracking-[0.3em] text-zinc-400">
-              <span>Umrak, the mountain yeti</span>
-              <span className="tabular">
+          <div className="w-full max-w-[16rem] font-mono sm:max-w-[20rem] md:w-[26rem] md:max-w-none">
+            <div className="flex items-baseline justify-between gap-2 text-[10px] uppercase tracking-[0.3em] text-zinc-400">
+              <span className="truncate">Umrak, the mountain yeti</span>
+              <span className="tabular shrink-0">
                 {hp}/{maxHp}
               </span>
             </div>
@@ -194,25 +217,30 @@ export default function BossMode({ difficulty, onFinish, onQuit }: ModeProps) {
             </div>
             {/* rage — attack telegraph */}
             <div className="mt-3 flex items-center gap-3">
-              <span className={`text-[10px] uppercase tracking-[0.3em] ${clubUp ? 'text-red-400' : 'text-zinc-500'}`}>
+              <span
+                className={`text-[10px] uppercase tracking-[0.3em] ${clubUp ? "text-red-400" : "text-zinc-500"}`}
+              >
                 rage
               </span>
               <div className="h-1 flex-1 bg-white/10">
                 <div
-                  className={`h-full ${clubUp ? 'bg-red-500' : 'bg-zinc-400'}`}
-                  style={{ width: `${charge * 100}%`, transition: 'width 90ms linear' }}
+                  className={`h-full ${clubUp ? "bg-red-500" : "bg-zinc-400"}`}
+                  style={{
+                    width: `${charge * 100}%`,
+                    transition: "width 90ms linear",
+                  }}
                 />
               </div>
             </div>
           </div>
 
-          <div className="w-20" />
+          <div className="hidden md:block md:w-20" />
         </div>
 
         {/* club-up warning */}
         {clubUp && (
-          <div className="absolute inset-x-0 bottom-6 flex justify-center">
-            <p className="animate-warn-pulse font-mono text-lg font-bold uppercase tracking-[0.35em] text-red-400">
+          <div className="absolute inset-x-0 bottom-6 flex justify-center px-4">
+            <p className="animate-warn-pulse text-center font-mono text-sm font-bold uppercase tracking-[0.35em] text-red-400 md:text-lg">
               his rage is peaking — finish the word
             </p>
           </div>
@@ -223,7 +251,7 @@ export default function BossMode({ difficulty, onFinish, onQuit }: ModeProps) {
           <div
             key={`typo-${typoKey}`}
             className="damage-float pointer-events-none absolute left-[30%] top-[40%] !text-red-400"
-            style={{ fontSize: '1.1rem' }}
+            style={{ fontSize: "1.1rem" }}
           >
             typo — his rage grows
           </div>
@@ -233,14 +261,14 @@ export default function BossMode({ difficulty, onFinish, onQuit }: ModeProps) {
         {outcome && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/75 backdrop-blur-[3px]">
             <p className="animate-rise-in font-mono text-[11px] uppercase tracking-[0.5em] text-zinc-500">
-              {outcome === 'win' ? 'the glade falls silent' : 'the blow landed'}
+              {outcome === "win" ? "the glade falls silent" : "the blow landed"}
             </p>
             <span
-              className={`animate-pop-in font-display text-8xl font-bold tracking-tight ${
-                outcome === 'win' ? 'text-volt' : 'text-red-400'
+              className={`animate-pop-in font-display text-5xl font-bold tracking-tight md:text-8xl ${
+                outcome === "win" ? "text-volt" : "text-red-400"
               }`}
             >
-              {outcome === 'win' ? 'FELLED.' : 'CRUSHED.'}
+              {outcome === "win" ? "FELLED." : "CRUSHED."}
             </span>
           </div>
         )}
@@ -248,25 +276,33 @@ export default function BossMode({ difficulty, onFinish, onQuit }: ModeProps) {
 
       {/* ── Typing deck ──────────────────────────────────────── */}
       <div
-        key={hurtKey ? `shake-${hurtKey}` : 'steady'}
-        className={`mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center px-10 ${
-          hurtKey > 0 && !outcome ? 'animate-screen-shake' : ''
+        key={hurtKey ? `shake-${hurtKey}` : "steady"}
+        className={`mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center px-5 md:px-10 ${
+          hurtKey > 0 && !outcome ? "animate-screen-shake" : ""
         }`}
       >
-        <div className="flex items-center justify-between border-b hairline pb-3 font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-600">
+        <div className="flex items-center justify-between gap-3 border-b hairline pb-3 font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-600">
           <span>⚔ {engine.stats.wpm} wpm</span>
           <span>03 — boss fight · {difficulty}</span>
-          <span>words = damage · typos feed his rage</span>
+          <span className="hidden md:inline">
+            words = damage · typos feed his rage
+          </span>
         </div>
-        <div className="flex justify-center py-9">
-          <TextDisplay text={engine.text} typed={engine.typed} className="text-5xl tracking-[0.18em]" />
+        <div className="flex justify-center py-6 md:py-9">
+          <TextDisplay
+            text={engine.text}
+            typed={engine.typed}
+            className="text-3xl tracking-[0.18em] md:text-5xl"
+          />
         </div>
         <p
           className={`text-center font-mono text-[10px] uppercase tracking-[0.3em] ${
-            lives === 1 ? 'animate-warn-pulse text-red-400' : 'text-zinc-700'
+            lives === 1 ? "animate-warn-pulse text-red-400" : "text-zinc-700"
           }`}
         >
-          {lives === 1 ? 'one heart left — do not let his rage peak' : 'no backspace · wrong keys are rejected'}
+          {lives === 1
+            ? "one heart left — do not let his rage peak"
+            : "no backspace · wrong keys are rejected"}
         </p>
       </div>
     </div>
