@@ -259,6 +259,11 @@ export function HiddenTypingInput({
   const engineRef = useRef(engine);
   engineRef.current = engine;
 
+  // True while a mobile IME is composing a word (predictive text). Writing to
+  // the field's `.value` during this window corrupts the composing buffer and
+  // shifts every following character — so all writes are gated on this.
+  const composingRef = useRef(false);
+
   // Keep focus, and refocus on any pointer-down so the soft keyboard reopens.
   useEffect(() => {
     const focus = () => ref.current?.focus();
@@ -275,8 +280,10 @@ export function HiddenTypingInput({
 
   // Mirror the engine's canonical typed text into the field so the soft
   // keyboard's value diff (and its Backspace) stays anchored to real progress.
+  // Skipped mid-composition: the IME owns the field's value until it commits.
   useEffect(() => {
     const el = ref.current;
+    if (composingRef.current) return;
     if (el && el.value !== engine.typed) el.value = engine.typed;
   }, [engine.typed]);
 
@@ -297,7 +304,21 @@ export function HiddenTypingInput({
           e.preventDefault();
           return;
         }
+        // Mid-composition keydowns (keyCode 229) belong to the IME — let the
+        // input/compositionend path handle them.
+        if (e.nativeEvent.isComposing) return;
         engineRef.current.handleKeyDown(e);
+      }}
+      onCompositionStart={() => {
+        composingRef.current = true;
+      }}
+      onCompositionEnd={(e) => {
+        // Word committed by the IME: reconcile once against its final value.
+        composingRef.current = false;
+        if (disabled) return;
+        const el = e.currentTarget;
+        const canonical = engineRef.current.syncFromValue(el.value);
+        if (el.value !== canonical) el.value = canonical;
       }}
       onInput={(e) => {
         const el = e.currentTarget;
@@ -306,8 +327,11 @@ export function HiddenTypingInput({
           return;
         }
         const canonical = engineRef.current.syncFromValue(el.value);
-        // Re-anchor the field to canonical text (undo rejected keys / deletes).
-        if (el.value !== canonical) el.value = canonical;
+        // Re-anchor the field to canonical text (undo rejected keys / deletes),
+        // but never while the IME is composing — that corrupts its buffer and
+        // misaligns every following character.
+        const composing = composingRef.current || e.nativeEvent.isComposing;
+        if (!composing && el.value !== canonical) el.value = canonical;
       }}
       onBlur={() => setTimeout(() => ref.current?.focus(), 10)}
     />
