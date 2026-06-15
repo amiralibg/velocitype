@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type {
+  CompositionEvent as ReactCompositionEvent,
+  FormEvent as ReactFormEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  RefObject,
+} from 'react';
 import { calcAccuracy, calcWpm } from '../../lib/scoring';
+
+/** The hidden capture field is an <input> on touch (raw keys) or <textarea> for code mode. */
+type FieldElement = HTMLInputElement | HTMLTextAreaElement;
 
 export interface TypingStats {
   wpm: number;
@@ -43,7 +51,7 @@ export interface TypingEngine {
   stats: TypingStats;
   isStarted: boolean;
   isComplete: boolean;
-  handleKeyDown: (e: ReactKeyboardEvent<HTMLTextAreaElement>) => void;
+  handleKeyDown: (e: ReactKeyboardEvent<FieldElement>) => void;
   /**
    * Soft-keyboard path: reconcile the engine against the raw value of a text
    * field after an `input` event. Returns the canonical typed string so the
@@ -209,7 +217,7 @@ export function useTypingEngine(options: TypingEngineOptions = {}): TypingEngine
   }, [refreshStats]);
 
   const handleKeyDown = useCallback(
-    (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    (e: ReactKeyboardEvent<FieldElement>) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       if (e.key === 'Backspace') {
@@ -267,24 +275,36 @@ export function useTypingEngine(options: TypingEngineOptions = {}): TypingEngine
  * `keydown`; on touch devices it reads `input` events (the soft keyboard's
  * `keydown` is unreliable) and mirrors the engine's canonical text back.
  *
+ * The capture field is an `<input type="password">`. Password fields are the one
+ * reliable way to make Android/iOS keyboards hand over raw keystrokes: they turn
+ * off the suggestion strip, autocorrect, glide typing, and IME composition. With
+ * predictive text on, the keyboard mangles the whole sentence into a single
+ * garbled token (and the field's value becomes that garbage), so every character
+ * renders as an error — no value-diffing can recover from that. The field is
+ * invisible, so the password masking is never seen. Code mode needs real
+ * newlines, so it opts into a plain `<textarea>` via `multiline`.
+ *
  * Stays focused for the whole game. A tap anywhere re-focuses it — and because
  * that runs inside a user gesture, it also opens the mobile keyboard.
  */
 export function HiddenTypingInput({
   engine,
   disabled = false,
+  multiline = false,
 }: {
   engine: TypingEngine;
   disabled?: boolean;
+  /** Code mode: use a <textarea> so the soft keyboard's Enter inserts a newline. */
+  multiline?: boolean;
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const ref = useRef<FieldElement>(null);
   const engineRef = useRef(engine);
   engineRef.current = engine;
 
-  // True while a mobile IME is composing a word (predictive text). The IME owns
-  // the field's value during this window — its buffer is shown as a display-only
-  // preview, and the engine isn't reconciled (nor the field written back) until
-  // the word commits on compositionend. Both are gated on this flag.
+  // True while a mobile IME is composing a word (predictive text). Only the
+  // <textarea> path (code mode) can hit this — password inputs never compose.
+  // The IME owns the field's value during this window: its buffer is shown as a
+  // display-only preview and the engine isn't reconciled until the word commits.
   const composingRef = useRef(false);
 
   // Keep focus, and refocus on any pointer-down so the soft keyboard reopens.
@@ -310,11 +330,90 @@ export function HiddenTypingInput({
     if (el && el.value !== engine.typed) el.value = engine.typed;
   }, [engine.typed]);
 
+  const onKeyDown = (e: ReactKeyboardEvent<FieldElement>) => {
+    if (disabled) {
+      e.preventDefault();
+      return;
+    }
+    // Mid-composition keydowns (keyCode 229) belong to the IME — let the
+    // input/compositionend path handle them.
+    if (e.nativeEvent.isComposing) return;
+    engineRef.current.handleKeyDown(e);
+  };
+
+  const onCompositionStart = () => {
+    composingRef.current = true;
+  };
+
+  const onCompositionEnd = (e: ReactCompositionEvent<FieldElement>) => {
+    // Word committed by the IME: reconcile once against its final value.
+    composingRef.current = false;
+    if (disabled) return;
+    const el = e.currentTarget;
+    const canonical = engineRef.current.syncFromValue(el.value);
+    if (el.value !== canonical) el.value = canonical;
+  };
+
+  const onInput = (e: ReactFormEvent<FieldElement>) => {
+    const el = e.currentTarget;
+    if (disabled) {
+      el.value = engineRef.current.typed;
+      return;
+    }
+    const composing = composingRef.current || (e.nativeEvent as InputEvent).isComposing;
+    if (composing) {
+      // A predictive IME rewrites its composing buffer on every keypress.
+      // Feeding those intermediate values to the engine double-counts errors
+      // and shifts the buffer (every char turns red). Instead show the buffer
+      // as a display-only preview and wait for compositionend to commit the
+      // finished word in one clean reconcile.
+      engineRef.current.previewValue(el.value);
+      // The final word has no trailing space to end composition, so commit once
+      // the composed text spans the whole target — otherwise the run could
+      // never complete.
+      if (el.value.length >= engineRef.current.text.length && el.value.length > 0) {
+        engineRef.current.syncFromValue(el.value);
+      }
+      return;
+    }
+    // Non-composing input (the normal path: raw keys from the password input,
+    // desktop, and the space after a committed word): reconcile immediately and
+    // re-anchor the field to canonical text (undo rejected keys / deletes).
+    const canonical = engineRef.current.syncFromValue(el.value);
+    if (el.value !== canonical) el.value = canonical;
+  };
+
+  const onBlur = () => setTimeout(() => ref.current?.focus(), 10);
+
+  // text-base (16px) keeps iOS from zooming the page on focus.
+  const className = 'absolute -z-10 h-0 w-0 resize-none border-0 bg-transparent p-0 text-base opacity-0';
+
+  if (multiline) {
+    return (
+      <textarea
+        ref={ref as RefObject<HTMLTextAreaElement>}
+        className={className}
+        autoFocus
+        autoCapitalize="none"
+        autoCorrect="off"
+        autoComplete="off"
+        spellCheck={false}
+        inputMode={disabled ? 'none' : 'text'}
+        aria-label="Typing input"
+        onKeyDown={onKeyDown}
+        onCompositionStart={onCompositionStart}
+        onCompositionEnd={onCompositionEnd}
+        onInput={onInput}
+        onBlur={onBlur}
+      />
+    );
+  }
+
   return (
-    <textarea
-      ref={ref}
-      // text-base (16px) keeps iOS from zooming the page on focus
-      className="absolute -z-10 h-0 w-0 resize-none border-0 bg-transparent p-0 text-base opacity-0"
+    <input
+      ref={ref as RefObject<HTMLInputElement>}
+      type="password"
+      className={className}
       autoFocus
       autoCapitalize="none"
       autoCorrect="off"
@@ -322,56 +421,11 @@ export function HiddenTypingInput({
       spellCheck={false}
       inputMode={disabled ? 'none' : 'text'}
       aria-label="Typing input"
-      onKeyDown={(e) => {
-        if (disabled) {
-          e.preventDefault();
-          return;
-        }
-        // Mid-composition keydowns (keyCode 229) belong to the IME — let the
-        // input/compositionend path handle them.
-        if (e.nativeEvent.isComposing) return;
-        engineRef.current.handleKeyDown(e);
-      }}
-      onCompositionStart={() => {
-        composingRef.current = true;
-      }}
-      onCompositionEnd={(e) => {
-        // Word committed by the IME: reconcile once against its final value.
-        composingRef.current = false;
-        if (disabled) return;
-        const el = e.currentTarget;
-        const canonical = engineRef.current.syncFromValue(el.value);
-        if (el.value !== canonical) el.value = canonical;
-      }}
-      onInput={(e) => {
-        const el = e.currentTarget;
-        if (disabled) {
-          el.value = engineRef.current.typed;
-          return;
-        }
-        const composing = composingRef.current || e.nativeEvent.isComposing;
-        if (composing) {
-          // A predictive IME rewrites its composing buffer on every keypress.
-          // Feeding those intermediate values to the engine double-counts
-          // errors and shifts the buffer (every char turns red). Instead show
-          // the buffer as a display-only preview and wait for compositionend to
-          // commit the finished word in one clean reconcile.
-          engineRef.current.previewValue(el.value);
-          // The final word has no trailing space to end composition, so commit
-          // once the composed text spans the whole target — otherwise the run
-          // could never complete.
-          if (el.value.length >= engineRef.current.text.length && el.value.length > 0) {
-            engineRef.current.syncFromValue(el.value);
-          }
-          return;
-        }
-        // Non-composing input (desktop, soft keyboards without prediction, and
-        // the space that follows a committed word): reconcile immediately and
-        // re-anchor the field to canonical text (undo rejected keys / deletes).
-        const canonical = engineRef.current.syncFromValue(el.value);
-        if (el.value !== canonical) el.value = canonical;
-      }}
-      onBlur={() => setTimeout(() => ref.current?.focus(), 10)}
+      onKeyDown={onKeyDown}
+      onCompositionStart={onCompositionStart}
+      onCompositionEnd={onCompositionEnd}
+      onInput={onInput}
+      onBlur={onBlur}
     />
   );
 }
