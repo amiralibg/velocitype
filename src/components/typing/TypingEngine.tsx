@@ -50,6 +50,14 @@ export interface TypingEngine {
    * field can be mirrored back (rejected keys / disallowed deletes are undone).
    */
   syncFromValue: (value: string) => string;
+  /**
+   * Mobile IME path: reflect the field's in-progress composing value in the
+   * display *without* counting keystrokes/errors. A predictive keyboard
+   * rewrites its composing buffer on every keypress; counting those churning
+   * intermediate values double-counts errors and misaligns the buffer. Stats
+   * are committed once, when the word lands (`syncFromValue` on compositionend).
+   */
+  previewValue: (value: string) => void;
   /** Full reset with a new target text. The clock starts on the first keystroke. */
   start: (text: string) => void;
   /** Swap in the next text chunk while keeping cumulative WPM/accuracy stats. */
@@ -237,7 +245,21 @@ export function useTypingEngine(options: TypingEngineOptions = {}): TypingEngine
     [commitChar, commitBackspace],
   );
 
-  return { text, typed, stats, isStarted, isComplete, handleKeyDown, syncFromValue, start, loadText };
+  const previewValue = useCallback((value: string) => {
+    // Display-only: mirror the IME's composing buffer so the user sees live
+    // colouring, but leave typedRef/stats untouched until the word commits.
+    if (completeRef.current) return;
+    // Still start the clock on the first keypress, even though this word's
+    // keystrokes aren't counted until it commits — otherwise timing/WPM would
+    // skip the first word and the "tap to type" hint would linger.
+    if (value.length > 0 && startTimeRef.current === null) {
+      startTimeRef.current = performance.now();
+      setIsStarted(true);
+    }
+    setTyped(value);
+  }, []);
+
+  return { text, typed, stats, isStarted, isComplete, handleKeyDown, syncFromValue, previewValue, start, loadText };
 }
 
 /**
@@ -259,9 +281,10 @@ export function HiddenTypingInput({
   const engineRef = useRef(engine);
   engineRef.current = engine;
 
-  // True while a mobile IME is composing a word (predictive text). Writing to
-  // the field's `.value` during this window corrupts the composing buffer and
-  // shifts every following character — so all writes are gated on this.
+  // True while a mobile IME is composing a word (predictive text). The IME owns
+  // the field's value during this window — its buffer is shown as a display-only
+  // preview, and the engine isn't reconciled (nor the field written back) until
+  // the word commits on compositionend. Both are gated on this flag.
   const composingRef = useRef(false);
 
   // Keep focus, and refocus on any pointer-down so the soft keyboard reopens.
@@ -326,12 +349,27 @@ export function HiddenTypingInput({
           el.value = engineRef.current.typed;
           return;
         }
-        const canonical = engineRef.current.syncFromValue(el.value);
-        // Re-anchor the field to canonical text (undo rejected keys / deletes),
-        // but never while the IME is composing — that corrupts its buffer and
-        // misaligns every following character.
         const composing = composingRef.current || e.nativeEvent.isComposing;
-        if (!composing && el.value !== canonical) el.value = canonical;
+        if (composing) {
+          // A predictive IME rewrites its composing buffer on every keypress.
+          // Feeding those intermediate values to the engine double-counts
+          // errors and shifts the buffer (every char turns red). Instead show
+          // the buffer as a display-only preview and wait for compositionend to
+          // commit the finished word in one clean reconcile.
+          engineRef.current.previewValue(el.value);
+          // The final word has no trailing space to end composition, so commit
+          // once the composed text spans the whole target — otherwise the run
+          // could never complete.
+          if (el.value.length >= engineRef.current.text.length && el.value.length > 0) {
+            engineRef.current.syncFromValue(el.value);
+          }
+          return;
+        }
+        // Non-composing input (desktop, soft keyboards without prediction, and
+        // the space that follows a committed word): reconcile immediately and
+        // re-anchor the field to canonical text (undo rejected keys / deletes).
+        const canonical = engineRef.current.syncFromValue(el.value);
+        if (el.value !== canonical) el.value = canonical;
       }}
       onBlur={() => setTimeout(() => ref.current?.focus(), 10)}
     />
