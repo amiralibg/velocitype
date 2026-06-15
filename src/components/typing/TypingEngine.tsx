@@ -53,6 +53,12 @@ export interface TypingEngine {
   isComplete: boolean;
   handleKeyDown: (e: ReactKeyboardEvent<FieldElement>) => void;
   /**
+   * The canonical typed string, read synchronously from the engine's ref. Unlike
+   * `typed` (React state, a render behind), this is always current — so the field
+   * can be re-anchored without truncating keystrokes the state hasn't caught up to.
+   */
+  getTyped: () => string;
+  /**
    * Soft-keyboard path: reconcile the engine against the raw value of a text
    * field after an `input` event. Returns the canonical typed string so the
    * field can be mirrored back (rejected keys / disallowed deletes are undone).
@@ -253,6 +259,8 @@ export function useTypingEngine(options: TypingEngineOptions = {}): TypingEngine
     [commitChar, commitBackspace],
   );
 
+  const getTyped = useCallback(() => typedRef.current, []);
+
   const previewValue = useCallback((value: string) => {
     // Display-only: mirror the IME's composing buffer so the user sees live
     // colouring, but leave typedRef/stats untouched until the word commits.
@@ -267,7 +275,19 @@ export function useTypingEngine(options: TypingEngineOptions = {}): TypingEngine
     setTyped(value);
   }, []);
 
-  return { text, typed, stats, isStarted, isComplete, handleKeyDown, syncFromValue, previewValue, start, loadText };
+  return {
+    text,
+    typed,
+    stats,
+    isStarted,
+    isComplete,
+    handleKeyDown,
+    getTyped,
+    syncFromValue,
+    previewValue,
+    start,
+    loadText,
+  };
 }
 
 /**
@@ -322,12 +342,18 @@ export function HiddenTypingInput({
   }, []);
 
   // Mirror the engine's canonical typed text into the field so the soft
-  // keyboard's value diff (and its Backspace) stays anchored to real progress.
+  // keyboard's value diff (and its Backspace) stays anchored to real progress
+  // (and to push non-keystroke changes like code-mode auto-indent or a reset).
+  // Read the synchronous canonical (getTyped), NOT engine.typed: the latter is
+  // a render behind, and on the live password field the keyboard mutates the
+  // value between renders — writing stale state back would truncate keystrokes
+  // the state hasn't caught up to, desyncing the field and scattering errors.
   // Skipped mid-composition: the IME owns the field's value until it commits.
   useEffect(() => {
     const el = ref.current;
-    if (composingRef.current) return;
-    if (el && el.value !== engine.typed) el.value = engine.typed;
+    if (composingRef.current || !el) return;
+    const canonical = engineRef.current.getTyped();
+    if (el.value !== canonical) el.value = canonical;
   }, [engine.typed]);
 
   const onKeyDown = (e: ReactKeyboardEvent<FieldElement>) => {
