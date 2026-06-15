@@ -99,7 +99,7 @@ export default function CodeMode({ difficulty, onFinish, onQuit }: ModeProps) {
   /* ── Typing screen ─────────────────────────────────────── */
   return (
     <div className="mx-auto flex h-full max-w-4xl flex-col justify-center px-5 md:px-10">
-      <HiddenTypingInput engine={engine} />
+      <HiddenTypingInput engine={engine} multiline />
 
       <div className="flex items-center justify-between gap-3 border-b hairline pb-4 font-mono text-[11px] uppercase tracking-[0.25em] text-mute">
         <button onClick={onQuit} className="shrink-0 whitespace-nowrap transition-colors hover:text-ink">
