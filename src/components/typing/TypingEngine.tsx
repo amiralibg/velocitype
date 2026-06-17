@@ -53,6 +53,15 @@ export interface TypingEngine {
   isComplete: boolean;
   handleKeyDown: (e: ReactKeyboardEvent<FieldElement>) => void;
   /**
+   * Touch path: commit one typed character ('\n' for Enter). Driven directly by
+   * `InputEvent.data`, because some mobile browsers report a corrupted field
+   * value (the caret pins to index 0 and characters get prepended, so the value
+   * comes out reversed) — but `data`/`inputType` are always reliable.
+   */
+  commitChar: (key: string) => void;
+  /** Touch path: delete the last typed character (respects allowBackspace). */
+  commitBackspace: () => void;
+  /**
    * The canonical typed string, read synchronously from the engine's ref. Unlike
    * `typed` (React state, a render behind), this is always current — so the field
    * can be re-anchored without truncating keystrokes the state hasn't caught up to.
@@ -282,6 +291,8 @@ export function useTypingEngine(options: TypingEngineOptions = {}): TypingEngine
     isStarted,
     isComplete,
     handleKeyDown,
+    commitChar,
+    commitBackspace,
     getTyped,
     syncFromValue,
     previewValue,
@@ -292,17 +303,21 @@ export function useTypingEngine(options: TypingEngineOptions = {}): TypingEngine
 
 /**
  * Off-screen field that captures all typing. On desktop it reads physical
- * `keydown`; on touch devices it reads `input` events (the soft keyboard's
- * `keydown` is unreliable) and mirrors the engine's canonical text back.
+ * `keydown`; on touch devices it reads `input` events and drives the engine
+ * from each event's `inputType` + `data` — never from the field's value.
  *
- * The capture field is an `<input type="password">`. Password fields are the one
- * reliable way to make Android/iOS keyboards hand over raw keystrokes: they turn
- * off the suggestion strip, autocorrect, glide typing, and IME composition. With
- * predictive text on, the keyboard mangles the whole sentence into a single
- * garbled token (and the field's value becomes that garbage), so every character
- * renders as an error — no value-diffing can recover from that. The field is
- * invisible, so the password masking is never seen. Code mode needs real
- * newlines, so it opts into a plain `<textarea>` via `multiline`.
+ * Reading the value is a trap on mobile: some browsers pin the hidden field's
+ * caret at index 0, so every keystroke is *prepended* and the value comes out
+ * reversed ("The" → "ehT"). Any value-diff then misreads that as all-wrong and
+ * the error count explodes. `InputEvent.data` is always the correct character(s)
+ * for the keystroke regardless, so the touch path commits straight from it.
+ *
+ * The capture field is an `<input type="password">`: that suppresses the
+ * suggestion strip, autocorrect, glide typing, and IME composition, so `data`
+ * stays one literal character per keystroke. The field is invisible, so the
+ * masking is never seen. Code mode needs real newlines, so it opts into a plain
+ * `<textarea>` via `multiline`; that path can still compose (predictive text),
+ * which is handled display-only via a preview until compositionend.
  *
  * Stays focused for the whole game. A tap anywhere re-focuses it — and because
  * that runs inside a user gesture, it also opens the mobile keyboard.
@@ -360,19 +375,16 @@ export function HiddenTypingInput({
     };
   }, []);
 
-  // Mirror the engine's canonical typed text into the field so the soft
-  // keyboard's value diff (and its Backspace) stays anchored to real progress
-  // (and to push non-keystroke changes like code-mode auto-indent or a reset).
-  // Read the synchronous canonical (getTyped), NOT engine.typed: the latter is
-  // a render behind, and on the live password field the keyboard mutates the
-  // value between renders — writing stale state back would truncate keystrokes
-  // the state hasn't caught up to, desyncing the field and scattering errors.
-  // Skipped mid-composition: the IME owns the field's value until it commits.
+  // Clear the field whenever the engine resets (new run or next text chunk:
+  // canonical typed goes empty). We deliberately do NOT mirror typed back into
+  // the field mid-typing: the touch path is driven by InputEvent.data, not the
+  // field value, so writing to .value would only fight the keyboard's caret.
+  // Letting the field accumulate raw (even reversed) keystrokes is harmless
+  // since nothing reads it; clearing on reset just stops unbounded growth.
   useEffect(() => {
     const el = ref.current;
-    if (composingRef.current || !el) return;
-    const canonical = engineRef.current.getTyped();
-    if (el.value !== canonical) el.value = canonical;
+    if (!el) return;
+    if (engineRef.current.getTyped() === '' && el.value !== '') el.value = '';
   }, [engine.typed]);
 
   const onKeyDown = (e: ReactKeyboardEvent<FieldElement>) => {
@@ -413,31 +425,39 @@ export function HiddenTypingInput({
   const onInput = (e: ReactFormEvent<FieldElement>) => {
     dbg('input', e);
     const el = e.currentTarget;
+    const ie = e.nativeEvent as InputEvent;
     if (disabled) {
-      el.value = engineRef.current.typed;
+      el.value = '';
       return;
     }
-    const composing = composingRef.current || (e.nativeEvent as InputEvent).isComposing;
-    if (composing) {
+    if (composingRef.current || ie.isComposing) {
       // A predictive IME rewrites its composing buffer on every keypress.
-      // Feeding those intermediate values to the engine double-counts errors
-      // and shifts the buffer (every char turns red). Instead show the buffer
-      // as a display-only preview and wait for compositionend to commit the
-      // finished word in one clean reconcile.
+      // Feeding those intermediate values to the engine double-counts errors and
+      // shifts the buffer (every char turns red). Show the buffer as a
+      // display-only preview and wait for compositionend to commit the finished
+      // word in one clean reconcile.
       engineRef.current.previewValue(el.value);
       // The final word has no trailing space to end composition, so commit once
-      // the composed text spans the whole target — otherwise the run could
-      // never complete.
+      // the composed text spans the whole target — otherwise the run could never
+      // complete.
       if (el.value.length >= engineRef.current.text.length && el.value.length > 0) {
         engineRef.current.syncFromValue(el.value);
       }
       return;
     }
-    // Non-composing input (the normal path: raw keys from the password input,
-    // desktop, and the space after a committed word): reconcile immediately and
-    // re-anchor the field to canonical text (undo rejected keys / deletes).
-    const canonical = engineRef.current.syncFromValue(el.value);
-    if (el.value !== canonical) el.value = canonical;
+    // Data-driven touch path. We do NOT read el.value: some mobile browsers pin
+    // the hidden field's caret at index 0, so characters get prepended and the
+    // value comes out reversed ("The" → "ehT"), which any value-diff misreads as
+    // all-wrong. InputEvent.data + inputType are reliable, so drive the engine
+    // straight from them — one char (or several, for paste/replace) per event.
+    const type = ie.inputType ?? '';
+    if (type.startsWith('delete')) {
+      engineRef.current.commitBackspace();
+    } else if (type === 'insertLineBreak' || type === 'insertParagraph') {
+      engineRef.current.commitChar('\n');
+    } else if (type.startsWith('insert')) {
+      for (const ch of ie.data ?? '') engineRef.current.commitChar(ch);
+    }
   };
 
   const onBlur = () => setTimeout(() => ref.current?.focus(), 10);
