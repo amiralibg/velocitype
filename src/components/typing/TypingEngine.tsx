@@ -327,6 +327,25 @@ export function HiddenTypingInput({
   // display-only preview and the engine isn't reconciled until the word commits.
   const composingRef = useRef(false);
 
+  // Diagnostic overlay (only when the URL has ?debug): logs the raw keyboard
+  // events as the device fires them, so we can see exactly how a given mobile
+  // keyboard delivers keystrokes. Passive — it never changes typing behaviour.
+  const DEBUG = typeof window !== 'undefined' && /[?&]debug\b/.test(window.location.search);
+  const logRef = useRef<string[]>([]);
+  const [, forceLog] = useState(0);
+  const dbg = (tag: string, e: { nativeEvent?: Event } | Event) => {
+    if (!DEBUG) return;
+    const ne = ('nativeEvent' in e ? e.nativeEvent : e) as InputEvent & KeyboardEvent;
+    const parts = [tag];
+    if (ne.inputType) parts.push(ne.inputType);
+    if (ne.key) parts.push(`k=${ne.key}`);
+    if (ne.data != null) parts.push(`d=${JSON.stringify(ne.data)}`);
+    parts.push(ne.isComposing ? 'comp' : '·');
+    parts.push(`v=${JSON.stringify((ref.current?.value ?? '').slice(-28))}`);
+    logRef.current = [...logRef.current.slice(-18), parts.join(' ')];
+    forceLog((n) => n + 1);
+  };
+
   // Keep focus, and refocus on any pointer-down so the soft keyboard reopens.
   useEffect(() => {
     const focus = () => ref.current?.focus();
@@ -357,6 +376,7 @@ export function HiddenTypingInput({
   }, [engine.typed]);
 
   const onKeyDown = (e: ReactKeyboardEvent<FieldElement>) => {
+    dbg('keydn', e);
     if (disabled) {
       e.preventDefault();
       return;
@@ -367,11 +387,21 @@ export function HiddenTypingInput({
     engineRef.current.handleKeyDown(e);
   };
 
-  const onCompositionStart = () => {
+  const onCompositionStart = (e: ReactCompositionEvent<FieldElement>) => {
+    dbg('comp↓', e);
     composingRef.current = true;
   };
 
+  const onCompositionUpdate = (e: ReactCompositionEvent<FieldElement>) => {
+    dbg('comp~', e);
+  };
+
+  const onBeforeInput = (e: ReactFormEvent<FieldElement>) => {
+    dbg('before', e);
+  };
+
   const onCompositionEnd = (e: ReactCompositionEvent<FieldElement>) => {
+    dbg('comp↑', e);
     // Word committed by the IME: reconcile once against its final value.
     composingRef.current = false;
     if (disabled) return;
@@ -381,6 +411,7 @@ export function HiddenTypingInput({
   };
 
   const onInput = (e: ReactFormEvent<FieldElement>) => {
+    dbg('input', e);
     const el = e.currentTarget;
     if (disabled) {
       el.value = engineRef.current.typed;
@@ -414,44 +445,60 @@ export function HiddenTypingInput({
   // text-base (16px) keeps iOS from zooming the page on focus.
   const className = 'absolute -z-10 h-0 w-0 resize-none border-0 bg-transparent p-0 text-base opacity-0';
 
-  if (multiline) {
-    return (
-      <textarea
-        ref={ref as RefObject<HTMLTextAreaElement>}
-        className={className}
-        autoFocus
-        autoCapitalize="none"
-        autoCorrect="off"
-        autoComplete="off"
-        spellCheck={false}
-        inputMode={disabled ? 'none' : 'text'}
-        aria-label="Typing input"
-        onKeyDown={onKeyDown}
-        onCompositionStart={onCompositionStart}
-        onCompositionEnd={onCompositionEnd}
-        onInput={onInput}
-        onBlur={onBlur}
-      />
-    );
-  }
+  const handlers = {
+    autoFocus: true,
+    autoCapitalize: 'none' as const,
+    autoCorrect: 'off',
+    autoComplete: 'off',
+    spellCheck: false,
+    inputMode: (disabled ? 'none' : 'text') as 'none' | 'text',
+    'aria-label': 'Typing input',
+    onKeyDown,
+    onCompositionStart,
+    onCompositionUpdate,
+    onCompositionEnd,
+    onBeforeInput,
+    onInput,
+    onBlur,
+  };
+
+  const overlay = DEBUG ? (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 9999,
+        maxHeight: '38vh',
+        overflow: 'auto',
+        background: 'rgba(0,0,0,0.9)',
+        color: '#9ae600',
+        font: '10px/1.4 monospace',
+        padding: '4px 6px',
+        whiteSpace: 'pre-wrap',
+        pointerEvents: 'none',
+      }}
+    >
+      <div style={{ color: '#888' }}>
+        text.len={engine.text.length} typed.len={engine.getTyped().length} composing={String(composingRef.current)}
+      </div>
+      {logRef.current.map((l, i) => (
+        <div key={i}>{l}</div>
+      ))}
+    </div>
+  ) : null;
+
+  const field = multiline ? (
+    <textarea ref={ref as RefObject<HTMLTextAreaElement>} className={className} {...handlers} />
+  ) : (
+    <input ref={ref as RefObject<HTMLInputElement>} type="password" className={className} {...handlers} />
+  );
 
   return (
-    <input
-      ref={ref as RefObject<HTMLInputElement>}
-      type="password"
-      className={className}
-      autoFocus
-      autoCapitalize="none"
-      autoCorrect="off"
-      autoComplete="off"
-      spellCheck={false}
-      inputMode={disabled ? 'none' : 'text'}
-      aria-label="Typing input"
-      onKeyDown={onKeyDown}
-      onCompositionStart={onCompositionStart}
-      onCompositionEnd={onCompositionEnd}
-      onInput={onInput}
-      onBlur={onBlur}
-    />
+    <>
+      {overlay}
+      {field}
+    </>
   );
 }
