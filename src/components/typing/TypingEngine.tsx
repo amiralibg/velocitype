@@ -338,9 +338,12 @@ export function HiddenTypingInput({
 
   // True while a mobile IME is composing a word (predictive text). Only the
   // <textarea> path (code mode) can hit this — password inputs never compose.
-  // The IME owns the field's value during this window: its buffer is shown as a
-  // display-only preview and the engine isn't reconciled until the word commits.
+  // The composing segment is shown as a display-only preview and isn't committed
+  // until the word lands. We track the segment from the event *data* (compStrRef)
+  // rather than the field value, because the value is corrupted on the affected
+  // browser (caret pinned at 0 → reversed) just like the non-composing path.
   const composingRef = useRef(false);
+  const compStrRef = useRef('');
 
   // Diagnostic overlay (only when the URL has ?debug): logs the raw keyboard
   // events as the device fires them, so we can see exactly how a given mobile
@@ -399,13 +402,24 @@ export function HiddenTypingInput({
     engineRef.current.handleKeyDown(e);
   };
 
+  // Show the composing segment as a display-only preview: committed text (from
+  // the engine) plus the in-flight composition string, which comes from event
+  // data — never the (reversed) field value.
+  const previewComposition = () => {
+    engineRef.current.previewValue(engineRef.current.getTyped() + compStrRef.current);
+  };
+
   const onCompositionStart = (e: ReactCompositionEvent<FieldElement>) => {
     dbg('comp↓', e);
     composingRef.current = true;
+    compStrRef.current = '';
   };
 
   const onCompositionUpdate = (e: ReactCompositionEvent<FieldElement>) => {
     dbg('comp~', e);
+    if (disabled) return;
+    compStrRef.current = e.data ?? '';
+    previewComposition();
   };
 
   const onBeforeInput = (e: ReactFormEvent<FieldElement>) => {
@@ -414,12 +428,17 @@ export function HiddenTypingInput({
 
   const onCompositionEnd = (e: ReactCompositionEvent<FieldElement>) => {
     dbg('comp↑', e);
-    // Word committed by the IME: reconcile once against its final value.
     composingRef.current = false;
-    if (disabled) return;
-    const el = e.currentTarget;
-    const canonical = engineRef.current.syncFromValue(el.value);
-    if (el.value !== canonical) el.value = canonical;
+    if (disabled) {
+      compStrRef.current = '';
+      return;
+    }
+    // The IME finalized the word: commit the composed segment one char at a time.
+    // We use the tracked data (compStrRef), not compositionend's own data — this
+    // keyboard reports an empty string there — and not el.value, which is reversed.
+    const composed = compStrRef.current;
+    compStrRef.current = '';
+    for (const ch of composed) engineRef.current.commitChar(ch);
   };
 
   const onInput = (e: ReactFormEvent<FieldElement>) => {
@@ -430,19 +449,13 @@ export function HiddenTypingInput({
       el.value = '';
       return;
     }
-    if (composingRef.current || ie.isComposing) {
-      // A predictive IME rewrites its composing buffer on every keypress.
-      // Feeding those intermediate values to the engine double-counts errors and
-      // shifts the buffer (every char turns red). Show the buffer as a
-      // display-only preview and wait for compositionend to commit the finished
-      // word in one clean reconcile.
-      engineRef.current.previewValue(el.value);
-      // The final word has no trailing space to end composition, so commit once
-      // the composed text spans the whole target — otherwise the run could never
-      // complete.
-      if (el.value.length >= engineRef.current.text.length && el.value.length > 0) {
-        engineRef.current.syncFromValue(el.value);
-      }
+    if (composingRef.current || ie.isComposing || ie.inputType === 'insertCompositionText') {
+      // Mid-composition: the IME rewrites its buffer on every keypress. Don't
+      // commit yet — just mirror the composing segment (from data) into the
+      // preview. compositionend commits it. (compositionupdate usually fires
+      // first, but track here too in case a keyboard skips it.)
+      if (ie.data != null) compStrRef.current = ie.data;
+      previewComposition();
       return;
     }
     // Data-driven touch path. We do NOT read el.value: some mobile browsers pin
